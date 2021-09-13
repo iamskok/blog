@@ -1,0 +1,22 @@
+[build]
+  functions = "src/functions"
+  autoLaunch = false
+
+[dev]
+  functions = "src/functions"
+  autoLaunch = false
+
+[[headers]]
+  for = "*.woff2"
+  [headers.values]
+    Cache-Control = "max-age=31536000, immutable"
+
+[[headers]]
+  for = "*.svg"
+  [headers.values]
+    Cache-Control = "max-age=31536000, immutable"
+
+[[headers]]
+  for = "*.mp3"
+  [headers.values]
+    Cache-Control = "max-age=31536000, immutable"

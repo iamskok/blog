@@ -1,0 +1,653 @@
+---
+title: Gatsby GraphQL Fragments
+description: How to add page components and keep them DRY with GraphQL fragments.
+datePublished: 2021-08-16
+dateModified: 2021-08-16
+image: ./cover.jpg
+imageAlt: Many shelves of yellow rubber ducks
+---
+
+import TableOfContents from "../../../src/components/table-of-contents"
+import Intro from "../../../src/components/intro"
+import { Underline } from "../../../src/components/notation"
+import {
+  SeriesIntro,
+  GraphiQLIframe,
+  CompletedProjectedLinks,
+} from "../../components/gatsby-seo-series"
+import { ProjectTreePartTwo, PageComponentsTable } from "./components"
+
+<Intro>
+
+<SeriesIntro part="2" />
+
+In Part 2, we will create five page components and learn about GraphQL fragments and aliases.
+We will also create the `Layout`, `Nav` components, and MDX blog posts with frontmatter.
+
+<CompletedProjectedLinks />
+
+Let's take a few moments to familiarize ourselves with the project structure.
+
+<ProjectTreePartTwo />
+
+</Intro>
+
+<TableOfContents
+  items={props.tableOfContentsItems}
+  ids={props.tableOfContentsHeaderIds}
+/>
+
+## Page Components and URL Structure Overview
+
+The blog we are building consists of five pages:
+
+<PageComponentsTable />
+
+Each one of these pages will include Open Graph, Twitter, and Schema.org markup
+that will be rendered by the [`SEO` component](/blog/gatsby-seo-component/). Every blog post has its folder with
+`index.mdx` and a cover image.
+
+## The Home Page Component
+
+All page components are stored in the `src/pages` directory.
+
+```jsx fileName=src/pages/index.js id=home-page-component-code-block
+/** @jsx jsx */
+import { jsx, Themed } from "theme-ui"
+import { graphql } from "gatsby"
+import useSiteMetadata from "../hooks/useSiteMetadata"
+import Layout from "../components/Layout"
+
+const Home = ({
+  data: {
+    file: { childImageSharp: seoImages },
+  },
+}) => {
+  const {
+    pages: {
+      home: { id, title, description, imageAlt, breadcrumb, type },
+    },
+  } = useSiteMetadata()
+  return (
+    <Layout
+      pageId={id}
+      title={title}
+      description={description}
+      images={{ ...seoImages }}
+      imageAlt={imageAlt}
+      breadcrumb={breadcrumb}
+      type={type}
+    >
+      <Themed.h1>Hi! My name is Jane.</Themed.h1>
+      // ✂️
+    </Layout>
+  )
+}
+
+export const query = graphql`
+  query ($image: String) {
+    file(absolutePath: { eq: $image }) {
+      childImageSharp {
+        ...ImageUrlFields
+      }
+    }
+  }
+`
+
+export default Home
+```
+
+We import `graphql` from `gatsby` and then we `export` a new constant called `query`
+(though its name can be anything). <Underline>`graphql` is a tagged template function and isn't executed
+the same way as typical JavaScript code</Underline>. During the build step, Gatsby converts the source code to an
+[abstract syntax tree](https://en.wikipedia.org/wiki/Abstract_syntax_tree) (AST) and removes `graphql`-tagged
+templates from the original source code. For these reasons, we can't use expression interpolation. However, we
+can still pass variables to the queries via the `context` argument of the `createPages` action. This is exactly what we
+did earlier with [`image` absolute file path](/blog/gatsby-node-and-config-files/#gatsby-node-js-code-block) in `gatsby-node.js`.
+And that is why it's available as `$image` inside of the query. <Underline>Keep in mind that you can only
+have one GraphQL query per file.</Underline>
+
+`ImageUrlFields` is the GraphQL fragment. GraphQL fragments are logical chunks of code that can be shared between
+multiple queries. Every fragment includes a subset of fields that belong to its associated type. GraphQL fragment
+syntax looks like JavaScript's spread operator and has a similar purpose: to assign the keys and values of one object
+to another object.
+
+The result of the query is automatically inserted into the `Home` component as the `data` prop. The rest of the page
+data is retrieved from [site-metadata.js](/blog/gatsby-node-and-config-files/#site-metadata) via
+the [`useSiteMetadata` hook](/blog/gatsby-node-and-config-files/#use-site-metadata-code-block).
+
+## The ImageUrlFields GraphQL Fragment
+
+Facebook, Twitter, Google all have different requirements for the size and aspect ratio of their cover images:
+
+- [Facebook](https://developers.facebook.com/docs/sharing/webmasters/images/) recommends images to be at least 1200x630 pixels.
+- [Twitter](https://developer.twitter.com/en/docs/twitter-for-websites/cards/overview/summary-card-with-large-image)
+  recommends an aspect ratio of 2:1 with minimum dimensions of 300x157 pixels.
+- [Google](https://developers.google.com/search/docs/data-types/article) recommends images to be at least 696 pixels
+  wide and suggests providing images with 16x9, 4x3, and 1x1 aspect ratios.
+
+We are going to use 1600 pixels as our baseline width.
+
+Let's create `ImageUrlFields.js` file in `src/fragments`:
+
+```js fileName=src/fragments/ImageUrlFields.js id=image-url-fields-code-block
+import { graphql } from "gatsby"
+
+export const ImageUrlFields = graphql`
+  fragment ImageUrlFields on ImageSharp {
+    twitter: gatsbyImageData(
+      layout: FIXED
+      width: 1600
+      height: 800
+      formats: [JPG]
+    )
+    openGraph: gatsbyImageData(
+      layout: FIXED
+      width: 1600
+      height: 838
+      formats: [JPG]
+    )
+    schemaOrg1x1: gatsbyImageData(
+      layout: FIXED
+      width: 1600
+      height: 1600
+      formats: [JPG]
+    )
+    schemaOrg4x3: gatsbyImageData(
+      layout: FIXED
+      width: 1600
+      height: 1200
+      formats: [JPG]
+    )
+    schemaOrg16x9: gatsbyImageData(
+      layout: FIXED
+      width: 1600
+      height: 900
+      formats: [JPG]
+    )
+  }
+`
+```
+
+`twitter`, `openGraph`, `schemaOrg1x1`, `schemaOrg4x3` and `schemaOrg16x9` are GraphQL aliases. Aliases are used
+to rename the returned data fields. Since the result object fields will match the name of the field (`gatsbyImageData`)
+we can't query for the same field with different arguments. The solution is to alias them to different names. This
+way, we can get all results in one request.
+
+To create a fragment, define it in a query and export it as a named `export`, which makes it globally available
+(there is no need to import fragments before using them) regardless of its location in the project. <Underline>All
+fragments must have unique names.</Underline>
+
+<GraphiQLIframe
+  title="ImageUrlFields GraphQL fragment example"
+  query="query%20(%24image%3A%20String)%20%7B%0A%20%20file(absolutePath%3A%20%7Beq%3A%20%24image%7D)%20%7B%0A%20%20%20%20childImageSharp%20%7B%0A%20%20%09%09...ImageUrlFields%0A%20%20%20%20%7D%0A%20%20%7D%0A%7D%0A%0Afragment%20ImageUrlFields%20on%20ImageSharp%20%7B%0A%20%20twitter%3A%20gatsbyImageData(%0A%20%20%20%20layout%3A%20FIXED%0A%20%20%20%20width%3A%201600%0A%20%20%20%20height%3A%20800%0A%20%20%20%20formats%3A%20JPG%0A%20%20)%0A%20%20openGraph%3A%20gatsbyImageData(%0A%20%20%20%20layout%3A%20FIXED%0A%20%20%20%20width%3A%201600%0A%20%20%20%20height%3A%20838%0A%20%20%20%20formats%3A%20JPG%0A%20%20)%0A%20%20schemaOrg1x1%3A%20gatsbyImageData(%0A%20%20%20%20layout%3A%20FIXED%0A%20%20%20%20width%3A%201600%0A%20%20%20%20height%3A%201600%0A%20%20%20%20formats%3A%20JPG%0A%20%20)%0A%20%20schemaOrg4x3%3A%20gatsbyImageData(%0A%20%20%20%20layout%3A%20FIXED%0A%20%20%20%20width%3A%201600%0A%20%20%20%20height%3A%201200%0A%20%20%20%20formats%3A%20JPG%0A%20%20)%0A%20%20schemaOrg16x9%3A%20gatsbyImageData(%0A%20%20%20%20layout%3A%20FIXED%0A%20%20%20%20width%3A%201600%0A%20%20%20%20height%3A%20900%0A%20%20%20%20formats%3A%20JPG%0A%20%20)%0A%7D%0A&operationName=Blog&explorerIsOpen=false&variables=%7B%0A%20%20%22image%22%3A%20%22%2Fapp%2Fsrc%2Fimages%2Fhome.jpg%22%0A%7D"
+/>
+
+## The Contact Page Component
+
+The `Contact` page is almost identical to the [`Home` page component](/blog/gatsby-graphql-fragments/#home-page-component-code-block). The
+only difference is that we fetch `siteMetadata.pages.contact` instead of `siteMetadata.pages.home`.
+
+```jsx fileName=src/pages/contact.js
+/** @jsx jsx */
+import { jsx, Themed } from "theme-ui"
+import { graphql } from "gatsby"
+import useSiteMetadata from "../hooks/useSiteMetadata"
+import Layout from "../components/Layout"
+
+const Contact = ({
+  data: {
+    file: { childImageSharp: seoImages },
+  },
+}) => {
+  const {
+    pages: {
+      contact: { id, pathName, title, description, imageAlt, breadcrumb, type },
+    },
+  } = useSiteMetadata()
+
+  return (
+    <Layout
+      pageId={id}
+      pathName={pathName}
+      title={title}
+      description={description}
+      images={{ ...seoImages }}
+      imageAlt={imageAlt}
+      breadcrumb={breadcrumb}
+      type={type}
+    >
+      <Themed.h1>{title}</Themed.h1>
+      // ✂️
+    </Layout>
+  )
+}
+
+export const query = graphql`
+  query ($image: String) {
+    file(absolutePath: { eq: $image }) {
+      childImageSharp {
+        ...ImageUrlFields
+      }
+    }
+  }
+`
+
+export default Contact
+```
+
+## The About Page Component
+
+The `About` page is almost identical to the [`Home` page component](/blog/gatsby-graphql-fragments/#home-page-component-code-block),
+but this time we fetch `siteMetadata.pages.about` instead of `siteMetadata.pages.home`.
+
+```jsx fileName=src/pages/about.js
+/** @jsx jsx */
+import { jsx, Themed } from "theme-ui"
+import { graphql } from "gatsby"
+import useSiteMetadata from "../hooks/useSiteMetadata"
+import Layout from "../components/Layout"
+
+const About = ({
+  data: {
+    file: { childImageSharp: seoImages },
+  },
+}) => {
+  const {
+    pages: {
+      about: { id, pathName, title, description, imageAlt, breadcrumb, type },
+    },
+  } = useSiteMetadata()
+
+  return (
+    <Layout
+      pageId={id}
+      pathName={pathName}
+      title={title}
+      description={description}
+      images={{ ...seoImages }}
+      imageAlt={imageAlt}
+      breadcrumb={breadcrumb}
+      type={type}
+    >
+      <Themed.h1>{title}</Themed.h1>
+      // ✂️
+    </Layout>
+  )
+}
+
+export const query = graphql`
+  query ($image: String) {
+    file(absolutePath: { eq: $image }) {
+      childImageSharp {
+        ...ImageUrlFields
+      }
+    }
+  }
+`
+
+export default About
+```
+
+## The Blog Page Component
+
+In the `Blog` page component, we first need to get all the MDX nodes (our articles) and
+[sort](https://www.gatsbyjs.com/docs/graphql-reference/#sort) them in descending order by the
+`frontmatter___published` field (as defined in the article's frontmatter). After this, we query for
+the `slug` node and [`FrontmatterFields` (GraphQL fragment) fields](/blog/gatsby-graphql-fragments/#frontmatter-fields-code-block)
+of the MDX nodes and loop over them to generate a list of all the articles.
+
+```jsx fileName=src/pages/blog.js
+/** @jsx jsx */
+import { jsx, Themed } from "theme-ui"
+import { graphql } from "gatsby"
+import { GatsbyImage } from "gatsby-plugin-image"
+import useSiteMetadata from "../hooks/useSiteMetadata"
+import Layout from "../components/Layout"
+import Link from "../components/Link"
+import slashify from "../helpers/slashify"
+
+const Blog = ({
+  data: {
+    allMdx,
+    file: { childImageSharp: seoImages },
+  },
+}) => {
+  const {
+    pages: {
+      blog: { id, pathName, title, description, imageAlt, breadcrumb, type },
+    },
+  } = useSiteMetadata()
+
+  return (
+    <Layout
+      pageId={id}
+      pathName={pathName}
+      title={title}
+      description={description}
+      images={{ ...seoImages }}
+      imageAlt={imageAlt}
+      breadcrumb={breadcrumb}
+      type={type}
+    >
+      <Themed.h1>{title}</Themed.h1>
+      <ul>
+        {allMdx.edges.map(
+          ({
+            node: {
+              id: key,
+              fields: { slug },
+              frontmatter: {
+                title,
+                description,
+                published,
+                image: {
+                  childImageSharp: { gatsbyImageData: coverImage },
+                },
+                imageAlt,
+              },
+            },
+          }) => (
+            <li key={key}>
+              <Link to={slashify(pathName, slug)}>
+                <Themed.h2>{title}</Themed.h2>
+              </Link>
+              <GatsbyImage image={coverImage} alt={imageAlt} />
+              <time>{published}</time>
+              <Themed.p>{description}</Themed.p>
+            </li>
+          )
+        )}
+      </ul>
+    </Layout>
+  )
+}
+
+export const query = graphql`
+  query ($image: String) {
+    file(absolutePath: { eq: $image }) {
+      childImageSharp {
+        ...ImageUrlFields
+      }
+    }
+    allMdx(sort: { order: DESC, fields: [frontmatter___published] }) {
+      edges {
+        node {
+          id
+          fields {
+            slug
+          }
+          frontmatter {
+            ...FrontmatterFields
+          }
+        }
+      }
+    }
+  }
+`
+
+export default Blog
+```
+
+<GraphiQLIframe
+  title="Blog GraphQL query example"
+  query='query%20(%24image%3A%20String)%20%7B%0A%20%20file(absolutePath%3A%20%7Beq%3A%20%24image%7D)%20%7B%0A%20%20%20%20childImageSharp%20%7B%0A%20%20%20%20%20%20...ImageUrlFields%0A%20%20%20%20%7D%0A%20%20%7D%0A%20%20allMdx(sort%3A%20%7Border%3A%20DESC%2C%20fields%3A%20frontmatter___published%7D)%20%7B%0A%20%20%20%20edges%20%7B%0A%20%20%20%20%20%20node%20%7B%0A%20%20%20%20%20%20%20%20id%0A%20%20%20%20%20%20%20%20fields%20%7B%0A%20%20%20%20%20%20%20%20%20%20slug%0A%20%20%20%20%20%20%20%20%7D%0A%20%20%20%20%20%20%20%20frontmatter%20%7B%0A%20%20%20%20%20%20%20%20%20%20...FrontmatterFields%0A%20%20%20%20%20%20%20%20%7D%0A%20%20%20%20%20%20%7D%0A%20%20%20%20%7D%0A%20%20%7D%0A%7D%0A%0Afragment%20FrontmatterFields%20on%20MdxFrontmatter%20%7B%0A%20%20title%0A%20%20description%0A%20%20published(formatString%3A%20"MMMM%20DD%2C%20YYYY")%0A%20%20modified(formatString%3A%20"MMMM%20DD%2C%20YYYY")%0A%20%20image%20%7B%0A%20%20%20%20childImageSharp%20%7B%0A%20%20%20%20%20%20gatsbyImageData(width%3A%20800%2C%20placeholder%3A%20BLURRED%2C%20formats%3A%20AUTO)%0A%20%20%20%20%7D%0A%20%20%7D%0A%20%20imageAlt%0A%7D%0A%0Afragment%20ImageUrlFields%20on%20ImageSharp%20%7B%0A%20%20twitter%3A%20gatsbyImageData(%0A%20%20%20%20layout%3A%20FIXED%0A%20%20%20%20width%3A%201600%0A%20%20%20%20height%3A%20800%0A%20%20%20%20formats%3A%20JPG%0A%20%20)%0A%20%20openGraph%3A%20gatsbyImageData(%0A%20%20%20%20layout%3A%20FIXED%0A%20%20%20%20width%3A%201600%0A%20%20%20%20height%3A%20838%0A%20%20%20%20formats%3A%20JPG%0A%20%20)%0A%20%20schemaOrg1x1%3A%20gatsbyImageData(%0A%20%20%20%20layout%3A%20FIXED%0A%20%20%20%20width%3A%201600%0A%20%20%20%20height%3A%201600%0A%20%20%20%20formats%3A%20JPG%0A%20%20)%0A%20%20schemaOrg4x3%3A%20gatsbyImageData(%0A%20%20%20%20layout%3A%20FIXED%0A%20%20%20%20width%3A%201600%0A%20%20%20%20height%3A%201200%0A%20%20%20%20formats%3A%20JPG%0A%20%20)%0A%20%20schemaOrg16x9%3A%20gatsbyImageData(%0A%20%20%20%20layout%3A%20FIXED%0A%20%20%20%20width%3A%201600%0A%20%20%20%20height%3A%20900%0A%20%20%20%20formats%3A%20JPG%0A%20%20)%0A%7D%0A%0A&operationName=Blog&explorerIsOpen=false&variables=%7B%0A%20%20"image"%3A%20"%2Fapp%2Fsrc%2Fimages%2Fblog.jpg"%0A%7D'
+/>
+
+## The FrontmatterFields GraphQL Fragment
+
+`FrontmatterFields` is a reusable piece of code that contains all the frontmatter fields of an MDX article. Here is
+an example of the article's frontmatter:
+
+```mdx fileName=/articles/golden-retriever/index.mdx id=frontmatter-code-block
+---
+title: Golden Retriever
+description: Awesome article about Golden Retriever
+published: 2019-01-01
+modified: 2019-03-01
+image: ./cover.jpg
+imageAlt: Golden Retriever puppy
+---
+```
+
+Let's create the `FrontmatterFields.js` file in `src/fragments`:
+
+```js fileName=src/fragments/FrontmatterFields.js id=frontmatter-fields-code-block
+import { graphql } from "gatsby"
+
+export const FrontmatterFields = graphql`
+  fragment FrontmatterFields on MdxFrontmatter {
+    title
+    description
+    published(formatString: "MMMM DD, YYYY")
+    modified(formatString: "MMMM DD, YYYY")
+    image {
+      childImageSharp {
+        gatsbyImageData(
+          width: 800
+          placeholder: BLURRED
+          formats: [AUTO, WEBP, AVIF]
+        )
+      }
+    }
+    imageAlt
+  }
+`
+```
+
+Since the `published` and `modified` fields use the `Date` type, we can apply the `formatString` function to them and
+use [Moment.js](https://momentjs.com/docs/#/displaying/format/) syntax to format the date strings.
+
+`image` is a file path that was converted to a GraphQL `File` node, and because it's an image, we can access
+the `childImageSharp` field. To configure image sizes, loading effect, and file formats, we pass arguments inside
+of the `gatsbyImageData` resolver. By setting the `width`, we are limiting the maximum image size. Gatsby image
+components are lazy-loaded by default. To ensure that the layout does not jump around, a placeholder is displayed
+before the image loads. The `BLURRED` option generates a low-resolution version of the source image and displays it as
+a blurred background. The [Gatsby Image plugin](https://www.gatsbyjs.com/docs/reference/built-in-components/gatsby-plugin-image/#image-options)
+supports four output formats: JPEG, PNG, WebP, and AVIF. `AUTO` means the plugin will generate images in the
+same format as the source image. In addition to this we also specify `WebP` and the new `AVIF` format (currently, `AVIF` has
+[limited browser support](https://caniuse.com/avif)).
+
+## The Article Page Component
+
+The `Article` component receives the MDX file and renders it.
+
+```jsx fileName=src/templates/article.js id=article-component-code-block
+/** @jsx jsx */
+import { jsx, Themed, Flex } from "theme-ui"
+import { graphql } from "gatsby"
+import { MDXRenderer } from "gatsby-plugin-mdx"
+import { GatsbyImage } from "gatsby-plugin-image"
+import useSiteMetadata from "../hooks/useSiteMetadata"
+import Layout from "../components/Layout"
+
+const Article = ({
+  data: {
+    mdx: {
+      body,
+      frontmatter: {
+        title,
+        description,
+        image: {
+          childImageSharp: { gatsbyImageData: coverImage, ...seoImages },
+        },
+        imageAlt,
+        published,
+        modified,
+      },
+    },
+  },
+  pageContext: { slug },
+}) => {
+  const {
+    pages: {
+      article: { id, type },
+    },
+  } = useSiteMetadata()
+
+  return (
+    <Layout
+      pageId={id}
+      type={type}
+      slug={slug}
+      title={title}
+      description={description}
+      images={{ ...seoImages }}
+      imageAlt={imageAlt}
+      published={published}
+      modified={modified}
+    >
+      <Flex>
+        <GatsbyImage image={coverImage} alt={imageAlt} />
+        <Themed.p>Published on {published}</Themed.p>
+        {modified && <Themed.p>Updated on {modified}</Themed.p>}
+        <MDXRenderer>{body}</MDXRenderer>
+      </Flex>
+    </Layout>
+  )
+}
+
+export const query = graphql`
+  query ($id: String!) {
+    mdx(id: { eq: $id }) {
+      body
+      frontmatter {
+        ...FrontmatterFields
+        image {
+          childImageSharp {
+            ...ImageUrlFields
+          }
+        }
+      }
+    }
+  }
+`
+
+export default Article
+```
+
+We query MDX data by `id` inside of the `graphql` string (`id` is accessible inside of the query because we passed it in
+[`context`](/blog/gatsby-node-and-config-files/#createpages-api)). Then we spread the `FrontmatterFields` fragment in
+the `frontmatter` node to get every frontmatter field. To get SEO images we spread the `ImageUrlFields` fragment in the
+`childImageSharp` node. The rest of the data is queried with the [`useSiteMetadata` hook](/blog/gatsby-node-and-config-files/#use-site-metadata-code-block).
+
+In the `Article` component, we pass the `body` (all MDX file content without frontmatter data) to the `MDXRenderer,` which is a
+component that takes compiled MDX content and renders it.
+
+<GraphiQLIframe
+  title="Article GraphQL query example"
+  query='%23%20Article%20MDX%20Node%20IDs%0A%0A%23%20Pugs%20-%20%60d28f21df-4ae7-5d1e-ab57-be666874dfdb%60%0A%23%20Siberian%20Husky%20-%20%60f836cff0-b39b-50f2-a3ad-0f88375e4547%60%0A%23%20Golden%20Retriever%20-%20%600285a08c-6e70-5bbc-9286-439cb2222ca6%60%0A%0Aquery%20(%24id%3A%20String!)%20%7B%0A%20%20mdx(id%3A%20%7Beq%3A%20%24id%7D)%20%7B%0A%20%20%20%20body%0A%20%20%20%20frontmatter%20%7B%0A%20%20%20%20%20%20...FrontmatterFields%0A%20%20%20%20%20%20image%20%7B%0A%20%20%20%20%20%20%20%20childImageSharp%20%7B%0A%20%20%20%20%20%20%20%20%20%20...ImageUrlFields%0A%20%20%20%20%20%20%20%20%7D%0A%20%20%20%20%20%20%7D%0A%20%20%20%20%7D%0A%20%20%7D%0A%7D%0A%0Afragment%20FrontmatterFields%20on%20MdxFrontmatter%20%7B%0A%20%20title%0A%20%20description%0A%20%20published(formatString%3A%20"MMMM%20DD%2C%20YYYY")%0A%20%20modified(formatString%3A%20"MMMM%20DD%2C%20YYYY")%0A%20%20image%20%7B%0A%20%20%20%20childImageSharp%20%7B%0A%20%20%20%20%20%20gatsbyImageData(width%3A%20800%2C%20placeholder%3A%20BLURRED%2C%20formats%3A%20AUTO)%0A%20%20%20%20%7D%0A%20%20%7D%0A%20%20imageAlt%0A%7D%0A%0Afragment%20ImageUrlFields%20on%20ImageSharp%20%7B%0A%20%20twitter%3A%20gatsbyImageData(%0A%20%20%20%20layout%3A%20FIXED%0A%20%20%20%20width%3A%201600%0A%20%20%20%20height%3A%20800%0A%20%20%20%20formats%3A%20JPG%0A%20%20)%0A%20%20openGraph%3A%20gatsbyImageData(%0A%20%20%20%20layout%3A%20FIXED%0A%20%20%20%20width%3A%201600%0A%20%20%20%20height%3A%20838%0A%20%20%20%20formats%3A%20JPG%0A%20%20)%0A%20%20schemaOrg1x1%3A%20gatsbyImageData(%0A%20%20%20%20layout%3A%20FIXED%0A%20%20%20%20width%3A%201600%0A%20%20%20%20height%3A%201600%0A%20%20%20%20formats%3A%20JPG%0A%20%20)%0A%20%20schemaOrg4x3%3A%20gatsbyImageData(%0A%20%20%20%20layout%3A%20FIXED%0A%20%20%20%20width%3A%201600%0A%20%20%20%20height%3A%201200%0A%20%20%20%20formats%3A%20JPG%0A%20%20)%0A%20%20schemaOrg16x9%3A%20gatsbyImageData(%0A%20%20%20%20layout%3A%20FIXED%0A%20%20%20%20width%3A%201600%0A%20%20%20%20height%3A%20900%0A%20%20%20%20formats%3A%20JPG%0A%20%20)%0A%7D%0A&operationName=Blog&explorerIsOpen=false&variables=%7B%0A%20%20"id"%3A%20"d28f21df-4ae7-5d1e-ab57-be666874dfdb"%0A%7D'
+/>
+
+### The Layout Component
+
+The `Layout` component in Gatsby is used to share common styles and components between pages. We use it to include
+`Nav` and `SEO` components for every page.
+
+```jsx fileName=src/components/Layout/index.js
+/** @jsx jsx */
+import { jsx, Flex } from "theme-ui"
+import { Fragment } from "react"
+import SEO from "../SEO"
+import Nav from "../Nav"
+
+const Layout = ({
+  children,
+  pageId,
+  pathName,
+  slug,
+  title,
+  description,
+  images,
+  imageAlt,
+  breadcrumb,
+  published,
+  modified,
+  type,
+}) => {
+  return (
+    <Fragment>
+      {pageId && (
+        <SEO
+          pageId={pageId}
+          pathName={pathName}
+          slug={slug}
+          title={title}
+          description={description}
+          images={images}
+          imageAlt={imageAlt}
+          breadcrumb={breadcrumb}
+          published={published}
+          modified={modified}
+          type={type}
+        />
+      )}
+      <Flex>
+        <Nav />
+        <main data-speakable="true">{children}</main>
+      </Flex>
+    </Fragment>
+  )
+}
+
+export default Layout
+```
+
+Not every page will require an `SEO` component. If you ever decide to add a 404 page, make sure
+that the `SEO` component is not rendered there. That's why we are using the `pageId` prop from
+[`site-metadata.js`](/blog/gatsby-node-and-config-files/#site-metadata) which is defined only for
+those pages that contain an `SEO` component.
+
+We append `data-speakable="true"` to the `main` tag in order to let assistive technologies know
+that the content inside of the page is suitable for Text-to-Speech interpretation.
+
+## The Nav Component
+
+In the `Nav` component, we use [`useSiteMetadata` hook](/blog/gatsby-node-and-config-files/#use-site-metadata-code-block) to
+get all of the pathnames. Then we format them with [slashify](/blog/gatsby-node-and-config-files/#slashify-code-block) and
+pass them as a `to` prop of a Gatsby `Link` component.
+
+```jsx fileName=src/components/Nav/index.js
+/** @jsx jsx */
+import { jsx } from "theme-ui"
+import { Link } from "gatsby"
+import useSiteMetadata from "../../hooks/useSiteMetadata"
+import slashify from "../../helpers/slashify"
+
+const Nav = () => {
+  const {
+    pages: {
+      home: { pathName: homePathName },
+      blog: { pathName: blogPathName },
+      contact: { pathName: contactPathName },
+      about: { pathName: aboutPathName },
+    },
+  } = useSiteMetadata()
+
+  return (
+    <ul>
+      <li>
+        <Link to={slashify(homePathName)}>Home</Link>
+      </li>
+      <li>
+        <Link to={slashify(blogPathName)}>Blog</Link>
+      </li>
+      <li>
+        <Link to={slashify(contactPathName)}>Contact</Link>
+      </li>
+      <li>
+        <Link to={slashify(aboutPathName)}>About</Link>
+      </li>
+    </ul>
+  )
+}
+
+export default Nav
+```
+
+## The MDX Articles
+
+The very last step is to create a few MDX files that will be used to render the articles. Don't forget to add
+[frontmatter](/blog/gatsby-graphql-fragments/#frontmatter-code-block) to the top of each file and cover images.
+As a reference, you can see the [Pug article](https://github.com/iamskok/gatsby-seo/blob/master/articles/pug/index.mdx)
+file.
