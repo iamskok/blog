@@ -58,7 +58,7 @@
     "react-intersection-observer": "8.32.1",
     "react-rough-notation": "1.0.1",
     "react-use": "17.3.1",
-    "remark-slug": "5.1.2",
+    "remark-slug": "7.0.0",
     "theme-ui": "0.11.2",
     "use-font-face-observer": "1.1.38",
     "use-sound": "4.0.1"
