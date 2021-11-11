@@ -31,7 +31,7 @@
     "@theme-ui/prism": "0.11.2",
     "dotenv": "10.0.0",
     "firebase": "9.0.2",
-    "framer-motion": "4.1.17",
+    "framer-motion": "5.3.0",
     "gatsby": "3.13.0",
     "gatsby-plugin-force-file-loader": "0.1.1",
     "gatsby-plugin-google-gtag": "3.13.0",
