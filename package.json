@@ -60,7 +60,7 @@
     "react-use": "17.3.1",
     "remark-slug": "5.1.2",
     "theme-ui": "0.11.2",
-    "use-font-face-observer": "1.1.38",
+    "use-font-face-observer": "1.2.1",
     "use-sound": "4.0.1"
   },
   "devDependencies": {
