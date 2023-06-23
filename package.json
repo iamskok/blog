@@ -30,7 +30,7 @@
     "@theme-ui/match-media": "0.11.2",
     "@theme-ui/prism": "0.11.2",
     "dotenv": "10.0.0",
-    "firebase": "9.0.2",
+    "firebase": "9.23.0",
     "framer-motion": "4.1.17",
     "gatsby": "3.13.0",
     "gatsby-plugin-force-file-loader": "0.1.1",
