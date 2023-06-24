@@ -32,7 +32,7 @@
     "dotenv": "10.0.0",
     "firebase": "9.0.2",
     "framer-motion": "4.1.17",
-    "gatsby": "3.13.0",
+    "gatsby": "4.25.7",
     "gatsby-plugin-force-file-loader": "0.1.1",
     "gatsby-plugin-google-gtag": "3.13.0",
     "gatsby-plugin-image": "1.13.0",
