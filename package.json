@@ -64,7 +64,7 @@
     "use-sound": "4.0.1"
   },
   "devDependencies": {
-    "eslint": "7.32.0",
+    "eslint": "8.57.0",
     "babel-eslint": "10.1.0",
     "eslint-config-prettier": "8.3.0",
     "eslint-plugin-extra-rules": "0.0.0-development",
